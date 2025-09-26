@@ -1,0 +1,8 @@
+# netlify.toml
+[build]
+  functions = "netlify/functions"  # waar Netlify je functions zoekt
+
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
