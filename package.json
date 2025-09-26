@@ -1,0 +1,10 @@
+    {
+      "name": "gemini-image-generator-netlify",
+      "version": "1.0.0",
+      "description": "Image generation using Netlify Functions and Gemini API.",
+      "main": "netlify/functions/generateImage.js",
+      "dependencies": {
+        "node-fetch": "^2.6.1"
+      }
+    }
+    

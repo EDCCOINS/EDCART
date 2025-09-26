@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Beeldgenerator (Netlify Ready)</title>
+    <!-- Laad Tailwind CSS voor styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Aangepaste font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        /* Stijl voor het ladenwieltje */
+        .loader {
+            border-top: 4px solid #3b82f6; /* Blauwe kleur */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-2xl bg-white shadow-xl rounded-xl p-6 md:p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">AI Beeldgenerator (Netlify)</h1>
+        <p class="text-gray-600 mb-6">Deze versie roept een veilige Netlify Function aan om de Gemini API te gebruiken.</p>
+
+        <!-- Input sectie -->
+        <div class="mb-6">
+            <label for="promptInput" class="block text-sm font-medium text-gray-700 mb-2">Jouw Prompt:</label>
+            <input type="text" id="promptInput" placeholder="Een astronaut die op een banaan surft in de ruimte..."
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 shadow-sm"
+                   value="Een close-up van een glazen robot die een regenboog schildert in een zonnig bos, digitale kunst.">
+        </div>
+
+        <!-- Generatie knop -->
+        <button id="generateButton" onclick="handleImageGeneration()"
+                class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 shadow-md disabled:bg-blue-400 flex items-center justify-center">
+            Afbeelding Genereren
+        </button>
+
+        <!-- Laadindicator en resultaten sectie -->
+        <div id="statusArea" class="mt-8">
+            <!-- Laadindicator (standaard verborgen) -->
+            <div id="loadingIndicator" class="hidden flex flex-col items-center justify-center p-6 bg-blue-50 rounded-lg">
+                <div class="loader mb-3"></div>
+                <p class="text-blue-700 font-medium">Bezig met genereren...</p>
+            </div>
+
+            <!-- Foutmelding (standaard verborgen) -->
+            <div id="errorArea" class="hidden p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg" role="alert">
+                <strong class="font-bold">Fout!</strong>
+                <span id="errorMessage" class="block sm:inline">Er is een probleem opgetreden tijdens het genereren.</span>
+            </div>
+
+            <!-- Afbeeldingscontainer -->
+            <div id="imageContainer" class="mt-6 hidden">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Resultaat:</h3>
+                <img id="generatedImage" src="" alt="Gegenereerde AI-afbeelding"
+                     class="w-full h-auto rounded-lg shadow-lg border border-gray-200 aspect-square object-cover"
+                     onerror="this.style.display='none'; document.getElementById('errorArea').classList.remove('hidden'); document.getElementById('errorMessage').textContent='Kon de gegenereerde afbeelding niet laden. Probeer een andere prompt.'">
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // CLIENT LOGIC: Roept de Netlify Function aan op een lokaal pad.
+        const GENERATE_ENDPOINT = '/.netlify/functions/generateImage'; 
+
+        // UI Elementen
+        const promptInput = document.getElementById('promptInput');
+        const generateButton = document.getElementById('generateButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorArea = document.getElementById('errorArea');
+        const errorMessage = document.getElementById('errorMessage');
+        const imageContainer = document.getElementById('imageContainer');
+        const generatedImage = document.getElementById('generatedImage');
+
+        /**
+         * Hulpfunctie om de UI-status bij te werken.
+         * @param {('loading'|'result'|'error'|'initial')} state - De nieuwe status van de UI.
+         * @param {string | null} msg - Foutbericht indien state is 'error'.
+         */
+        function updateUI(state, msg = null) {
+            generateButton.disabled = state === 'loading';
+            generateButton.textContent = state === 'loading' ? 'Bezig met genereren...' : 'Afbeelding Genereren';
+            loadingIndicator.classList.toggle('hidden', state !== 'loading');
+            errorArea.classList.toggle('hidden', state !== 'error');
+            imageContainer.classList.toggle('hidden', state !== 'result');
+
+            if (state === 'error' && msg) {
+                errorMessage.textContent = msg;
+                console.error("Generatiefout:", msg);
+            }
+        }
+
+        /**
+         * Hoofdfunctie om het generatieproces af te handelen.
+         * Roept de Netlify Function aan.
+         */
+        async function handleImageGeneration() {
+            const promptText = promptInput.value.trim();
+
+            if (!promptText) {
+                updateUI('error', 'Voer alstublieft een beschrijvende prompt in.');
+                return;
+            }
+
+            updateUI('loading');
+
+            try {
+                // Roep de Netlify Function aan
+                const response = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+
+                if (!response.ok) {
+                    const errorDetails = await response.json().catch(() => ({}));
+                    throw new Error(`Serverfout: ${response.status} ${response.statusText} - ${errorDetails.message || 'Onbekende fout.'}`);
+                }
+
+                const result = await response.json();
+                const { base64Data, mimeType } = result;
+
+                if (!base64Data) {
+                    updateUI('error', 'De server heeft geen geldige afbeelding geretourneerd.');
+                    return;
+                }
+
+                // Creëer de data URL en update de afbeelding
+                const imageUrl = `data:${mimeType || 'image/png'};base64,${base64Data}`;
+                generatedImage.src = imageUrl;
+                
+                generatedImage.style.display = 'block';
+
+                updateUI('result');
+
+            } catch (error) {
+                updateUI('error', error.message || 'Onbekende fout tijdens communicatie met de server.');
+            }
+        }
+    </script>
+</body>
+</html>
